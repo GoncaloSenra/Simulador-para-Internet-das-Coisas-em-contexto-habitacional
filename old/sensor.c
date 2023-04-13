@@ -1,10 +1,11 @@
-// Gonçalo Senra    2020213750
-// Rui Coelho       2021235407
+//compile with: gcc -Wall -pthread sharedvariable_posix.c -o svar
+//using POSIX named semaphores
 
 #include <sys/ipc.h>
 #include <sys/shm.h>
-#include <semaphore.h>
+#include <semaphore.h> // include POSIX semaphores
 
+/*insert here the other libraries needed*/
 #include<stdlib.h>
 #include<stdio.h>
 #include<unistd.h>
