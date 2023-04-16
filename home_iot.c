@@ -34,7 +34,7 @@ void exit_home_iot(){
 }
 
 void sigint(int signum) { // handling of CTRL-C
-	printf("hellooooo\n");
+	//printf("hellooooo\n");
 	write_logfile("SIGNAL SIGINT RECEIVED\n");
 	exit_home_iot();
 	exit(0);

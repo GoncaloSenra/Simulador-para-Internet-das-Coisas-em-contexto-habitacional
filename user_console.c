@@ -23,6 +23,15 @@ int main(int argc, char *argv[]) {
     } else{
         printf("Welcome %s!\n", argv[1]);
     }
+    
+    // Opens the pipe for writing
+    int fd;
+	if ((fd = open("CONSOLE_PIPE", O_WRONLY|O_NONBLOCK)) < 0) {
+		perror("Cannot open pipe for writing: ");
+		exit(0);
+	}
+
+	char buffer[1024] = "";
 
     // Print MENU
     printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n> ");
@@ -58,7 +67,8 @@ int main(int argc, char *argv[]) {
                 notValid = 1;
             }
             if (notValid == 0) {
-                printf("Not implemented!");
+                sprintf(buffer, "%s#STATS", argv[1]);
+                write(fd, &buffer, 1024);
             }
         } else if (strcmp(tokens[0], "reset") == 0) {
             if (count != 1) {
@@ -66,7 +76,8 @@ int main(int argc, char *argv[]) {
                 notValid = 1;
             }
             if (notValid == 0) {
-                printf("Not implemented!");
+                sprintf(buffer, "%s#RESET", argv[1]);
+                write(fd, &buffer, 1024);
             }
         } else if (strcmp(tokens[0], "sensors") == 0) {
             if (count != 1) {
@@ -74,7 +85,8 @@ int main(int argc, char *argv[]) {
                 notValid = 1;
             }
             if (notValid == 0) {
-                printf("Not implemented!");
+                sprintf(buffer, "%s#SENSORS", argv[1]);
+                write(fd, &buffer, 1024);
             }
         } else if (strcmp(tokens[0], "add_alert") == 0) {
             if (count != 5) {
@@ -105,9 +117,15 @@ int main(int argc, char *argv[]) {
                     notValid = 1;
                 }
             }
+            
+            if (atoi(tokens[3])>atoi(tokens[4])){
+            	printf("Max must be higher than Min\n");
+            	notValid=1;
+            }
 
             if (notValid == 0){
-                printf("Not implemented!");
+                sprintf(buffer, "%s#ADD_ALERT#%s#%s#%s#%s", argv[1], tokens[1], tokens[2], tokens[3], tokens[4]);
+                write(fd, &buffer, 1024);
                 
             }
         } else if (strcmp(tokens[0], "remove_alert") == 0) {
@@ -132,7 +150,7 @@ int main(int argc, char *argv[]) {
 
         // Print MENU
         printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n> ");
-
+		memset(buffer, 0, 1024);
     }
 
 }
