@@ -118,7 +118,7 @@ int main(int argc, char *argv[]) {
             if (notValid == 0) {
                 printf("Not implemented!");
             }
-        } else if (strcmp(tokens[0], "list_alert") == 0) {
+        } else if (strcmp(tokens[0], "list_alerts") == 0) {
             if (count != 1) {
                 printf("Not valid!\n");
                 notValid = 1;

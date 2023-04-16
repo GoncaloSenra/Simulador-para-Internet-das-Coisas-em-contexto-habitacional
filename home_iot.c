@@ -5,6 +5,41 @@
 
 static FILE * log = NULL;
 
+void exit_home_iot(){
+
+	write_logfile("HOME_IOT SIMULATOR WAITING FOR LAST TASKS TO FINISH\n");
+	
+	// Join Threads
+	sem_wait(mutex_shm);
+	
+	sh_var->terminate=1;
+	
+    pthread_join(sh_var->console_reader_t, NULL);
+    pthread_join(sh_var->sensor_reader_t, NULL);
+    pthread_join(sh_var->dispatcher_t, NULL);
+	sem_post(mutex_shm);
+	
+	write_logfile("HOME_IOT SIMULATOR CLOSING\n");
+	
+    // Remove resources
+    sem_close(mutex_shm);
+	sem_unlink("MUTEX_SHM");
+    
+    sem_close(mutex_log);
+	sem_unlink("MUTEX_LOG");
+	
+	shmdt(sh_var);
+	shmctl(shmid, IPC_RMID, NULL);
+
+}
+
+void sigint(int signum) { // handling of CTRL-C
+	printf("hellooooo\n");
+	write_logfile("SIGNAL SIGINT RECEIVED\n");
+	exit_home_iot();
+	exit(0);
+}
+
 void write_logfile(char * message){
 
     time_t rawtime;
@@ -36,7 +71,33 @@ void write_logfile(char * message){
 void * console_reader(void * id_t) {
 
     write_logfile("THREAD CONSOLE_READER CREATED\n");
-
+    
+    // Opens the pipe for reading
+	int fd;
+	if ((fd = open("CONSOLE_PIPE", O_RDONLY|O_NONBLOCK)) < 0) {
+		perror("Cannot open pipe for reading: ");
+		exit(0);
+	}
+	char buffer[1024] = "";
+	
+	while(1){
+		//sem_wait(mutex_shm);
+		if (sh_var->terminate == 1){
+			write_logfile("THREAD CONSOLE_READER EXITING\n");
+			pthread_exit(NULL);
+		}
+		//sem_post(mutex_shm);
+		
+	
+		long tam = read(fd, buffer, 1024);
+		buffer[tam-1] = '\0';
+		
+		if (strcmp(buffer, "") != 0){
+			printf("CONSOLE_PIPE: %s\n", buffer);
+			memset(buffer, 0, 1024);
+		}
+		sleep(2);
+	}
 
     pthread_exit(NULL);
 }
@@ -45,24 +106,53 @@ void * sensor_reader(void * id_t) {
 
     write_logfile("THREAD SENSOR_READER CREATED\n");
 
-
+	// Opens the pipe for reading
+	int fd;
+	if ((fd = open("SENSOR_PIPE", O_RDONLY|O_NONBLOCK)) < 0) {
+		perror("Cannot open pipe for reading: ");
+		exit(0);
+	}
+	char buffer[1024] = "";
+	
+	while(1){
+		
+		//sem_wait(mutex_shm);
+		if (sh_var->terminate == 1){
+			write_logfile("THREAD SENSOR_READER EXITING\n");
+			pthread_exit(NULL);
+		}
+		//sem_post(mutex_shm);
+		
+		
+		long tam = read(fd, buffer, 1024);
+		buffer[tam-1] = '\0';
+		
+		if (strcmp(buffer, "") != 0){
+			printf("SENSOR_PIPE: %s\n", buffer);
+			memset(buffer, 0, 1024);
+		}
+	}
+	
     pthread_exit(NULL);
 }
 
 void * dispatcher(void * id_t) {
 
     write_logfile("THREAD DISPATCHER CREATED\n");
+	
+	while(1){
+		//sem_wait(mutex_shm);
+		if (sh_var->terminate == 1){
+			write_logfile("THREAD DISPATCHER EXITING\n");
+			pthread_exit(NULL);
+		}
+		//sem_post(mutex_shm);
+	}
 
-
-    pthread_exit(NULL);
 }
 
 
 int create_procs_threads() {
-
-    pthread_t console_reader_t;
-    pthread_t sensor_reader_t;
-    pthread_t dispatcher_t;
 
     // Create Workers
     int i;
@@ -78,34 +168,43 @@ int create_procs_threads() {
         alerts_watcher(0);
         exit(0);
     }
-
+    
+	
+	printf("teste\n");
+	
+	sem_wait(mutex_shm);
     // Create Console Reader thread
     int cr_id = 1;
-    pthread_create(&console_reader_t, NULL, console_reader, &cr_id);
+    pthread_create(&sh_var->console_reader_t, NULL, console_reader, &cr_id);
 
     // Create Sensor Reader thread
     int sr_id = 2;
-    pthread_create(&sensor_reader_t, NULL, sensor_reader, &sr_id);
+    pthread_create(&sh_var->sensor_reader_t, NULL, sensor_reader, &sr_id);
 
     // Create Dispatcher thread
     int d_id = 3;
-    pthread_create(&dispatcher_t, NULL, dispatcher, &d_id);
-
-    // Join Threads
-    pthread_join(console_reader_t, NULL);
-    pthread_join(sensor_reader_t, NULL);
-    pthread_join(dispatcher_t, NULL);
-
-
-    // Wait for Workers and Alerts_Watcher
-    for (i = 0; i < sh_var->N_WORKERS + 1; i++) {
+    pthread_create(&sh_var->dispatcher_t, NULL, dispatcher, &d_id);
+    
+    sem_post(mutex_shm);
+    
+	pthread_join(sh_var->console_reader_t, NULL);
+    pthread_join(sh_var->sensor_reader_t, NULL);
+    pthread_join(sh_var->dispatcher_t, NULL);
+    
+    /*
+    for (i = 0; i < sh_var->N_WORKERS+1; i++) {
         wait(NULL);
     }
-
+    */
+    
+    
     return 0;
 }
 
 int main(int argc, char *argv[]) {
+	
+	//terminates when CTRL-C is pressed
+	signal(SIGINT,sigint);
 
     log = fopen("log.txt", "w");
     fclose(log);
@@ -186,24 +285,29 @@ int main(int argc, char *argv[]) {
 	mutex_shm = sem_open("MUTEX_SHM", O_CREAT|O_EXCL, 0777, 1);
     sem_unlink("MUTEX_LOG");
 	mutex_log = sem_open("MUTEX_LOG", O_CREAT|O_EXCL, 0777, 1);
+	
+	
+	// Creates the named pipe if it doesn't exist yet
+	//unlink("CONSOLE_PIPE");
+	if ((mkfifo("CONSOLE_PIPE", O_CREAT|O_EXCL|0600)<0) && (errno!= EEXIST)) {
+		perror("Cannot create pipe: ");
+		exit(0);
+	}
+	
+	if ((mkfifo("SENSOR_PIPE", O_CREAT|O_EXCL|0600)<0) && (errno!= EEXIST)) {
+		perror("Cannot create pipe: ");
+		exit(0);
+	}
 
     write_logfile("HOME_IOT SIMULATOR STARTING\n");
     
     // Function to create Processes and Threads
     if (failure == 0)
         create_procs_threads();
-    
-    write_logfile("HOME_IOT SIMULATOR CLOSING\n");
-
-    // Remove resources
-    sem_close(mutex_shm);
-	sem_unlink("MUTEX_SHM");
-    
-    sem_close(mutex_log);
-	sem_unlink("MUTEX_LOG");
-	
-	shmdt(sh_var);
-	shmctl(shmid, IPC_RMID, NULL);
+    else 
+    	exit_home_iot();
+    	
+    //wait(NULL);
 
     return 0;
 }

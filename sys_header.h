@@ -15,6 +15,9 @@
 #include <ctype.h>
 #include <pthread.h>
 #include <time.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <signal.h>
 
 
 typedef struct shared_memory{
@@ -24,7 +27,14 @@ typedef struct shared_memory{
     int MAX_KEYS;
     int MAX_SENSORS;
     int teste;
-
+    int terminate;
+	
+	
+	pthread_t console_reader_t;
+	pthread_t sensor_reader_t;
+	pthread_t dispatcher_t;
+	
+	
 } Shared_var;
 
 Shared_var* sh_var;
