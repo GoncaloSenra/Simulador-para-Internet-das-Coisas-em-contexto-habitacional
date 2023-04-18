@@ -3,11 +3,10 @@
 
 #include "sys_header.h"
 
-
-int alerts_watcher(int id) {
+int alerts_watcher(int id)
+{
 
     write_logfile("PROCESS ALERTS_WATCHER CREATED\n");
-
 
     return 0;
 }
