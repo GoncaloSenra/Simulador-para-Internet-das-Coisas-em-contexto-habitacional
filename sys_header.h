@@ -5,12 +5,12 @@
 #include <sys/shm.h>
 #include <semaphore.h> // include POSIX semaphores
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/wait.h>
-#include <sys/types.h>
+#include<stdlib.h>
+#include<stdio.h>
+#include<unistd.h>
+#include<fcntl.h>
+#include<sys/wait.h>
+#include<sys/types.h>
 #include <string.h>
 #include <ctype.h>
 #include <pthread.h>
@@ -20,22 +20,19 @@
 #include <signal.h>
 #include <pthread.h>
 
-typedef struct Node
-{
-    char *data;
-    struct Node *next;
-    struct Node *prev;
+typedef struct Node {
+    char * data;
+    struct Node* next;
+    struct Node* prev;
 } Node;
 
-typedef struct
-{
-    Node *head;
-    Node *tail;
+typedef struct {
+    Node* head;
+    Node* tail;
     int count;
 } Queue;
 
-typedef struct shared_memory
-{
+typedef struct shared_memory{
     int N_WORKERS;
     int QUEUE_SZ;
     int MAX_ALERTS;
@@ -43,23 +40,29 @@ typedef struct shared_memory
     int MAX_SENSORS;
     int teste;
     int terminate;
-
-    pthread_t console_reader_t;
-    pthread_t sensor_reader_t;
-    pthread_t dispatcher_t;
-
+	
+	
+	pthread_t console_reader_t;
+	pthread_t sensor_reader_t;
+	pthread_t dispatcher_t;
+	
+	
 } Shared_var;
 
-Shared_var *sh_var;
+Shared_var* sh_var;
 
-Queue *internalQ;
+Queue* internalQ;
 
 int shmid;
 sem_t *mutex_shm;
 sem_t *mutex_log;
 sem_t *sem_qsize;
+sem_t *sem_qcons;
 
-void write_logfile(char *message);
+
+
+
+void write_logfile(char * message);
 
 int worker(int id);
 
