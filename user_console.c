@@ -5,12 +5,12 @@
 #include <sys/shm.h>
 #include <semaphore.h> 
 
-#include<stdlib.h>
-#include<stdio.h>
-#include<unistd.h>
-#include<fcntl.h>
-#include<sys/wait.h>
-#include<sys/types.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <string.h>
 #include <ctype.h>
 #include <signal.h>
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
     
     // Opens the pipe for writing
     int fd;
-	if ((fd = open("CONSOLE_PIPE", O_WRONLY|O_NONBLOCK)) < 0) {
+	if ((fd = open("CONSOLE_PIPE", O_WRONLY)) < 0) {
 		perror("Cannot open pipe for writing: ");
 		exit(0);
 	}

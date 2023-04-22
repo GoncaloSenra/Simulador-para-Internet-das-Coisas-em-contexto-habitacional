@@ -5,12 +5,12 @@
 #include <sys/shm.h>
 #include <semaphore.h> // include POSIX semaphores
 
-#include<stdlib.h>
-#include<stdio.h>
-#include<unistd.h>
-#include<fcntl.h>
-#include<sys/wait.h>
-#include<sys/types.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <sys/types.h>
 #include <string.h>
 #include <ctype.h>
 #include <pthread.h>

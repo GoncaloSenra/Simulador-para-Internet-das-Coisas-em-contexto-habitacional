@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
 
 	// Opens the pipe for writing
     int fd;
-	if ((fd = open("SENSOR_PIPE", O_WRONLY|O_NONBLOCK)) < 0) {
+	if ((fd = open("SENSOR_PIPE", O_WRONLY)) < 0) {
 		perror("Cannot open pipe for writing: ");
 		exit(0);
 	}

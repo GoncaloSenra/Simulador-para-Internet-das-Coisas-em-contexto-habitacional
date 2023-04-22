@@ -92,66 +92,62 @@ void * console_reader(void * id_t) {
 
     write_logfile("THREAD CONSOLE_READER CREATED\n");
     
-    // Opens the pipe for reading
-	int fd;
-	if ((fd = open("CONSOLE_PIPE", O_RDONLY|O_NONBLOCK)) < 0) {
-		perror("Cannot open pipe for reading: ");
-		exit(0);
-	}
 	char buffer[1024] = "";
 	
 	while(1){
-		/*
-		//sem_wait(mutex_shm);
-		if (sh_var->terminate == 1){
-			close(fd);
-			unlink("CONSOLE_PIPE");
-			write_logfile("THREAD CONSOLE_READER EXITING\n");
-			pthread_exit(NULL);
-		}
-		//sem_post(mutex_shm);
-		*/
-	
-		long tam = read(fd, buffer, 1024);
-		buffer[tam-1] = '\0';
 		
-		if (strcmp(buffer, "") != 0){
-			printf("CONSOLE_PIPE: %s\n", buffer);
-			
-			Node * newNode = (Node*) malloc(sizeof(Node*));
-			newNode->data = (char*) malloc(sizeof(char*));
-			strcpy(newNode->data, buffer);
-			newNode->next = NULL;
-			newNode->prev = NULL;
-			
-			pthread_mutex_lock(&mutex_queue);
-			
-			if (internalQ->count == sh_var->QUEUE_SZ) {
-				printf("FILA CHEIA!\n");
-			}
-			
-			sem_wait(sem_qsize);
-			
-			printf("ENTROU NA FILA\n");
-
-			if (internalQ->count == 0){
-				internalQ->head = newNode;
-				internalQ->tail = newNode;
-				internalQ->count++;
-			} else {
-				internalQ->head->next = newNode;
-				newNode->prev = internalQ->head;
-				internalQ->head = newNode;
-				internalQ->count++;
-			}
-			
-			sem_post(sem_qcons);
-			
-			pthread_mutex_unlock(&mutex_queue);
-			memset(buffer, 0, 1024);
-			
+		long tam;
+		
+		// Opens the pipe for reading
+		int fd;
+		if ((fd = open("CONSOLE_PIPE", O_RDONLY)) < 0) {
+			perror("Cannot open pipe for reading: ");
+			exit(0);
 		}
-		sleep(2);
+		
+		do {
+			tam = read(fd, buffer, 1024);
+			//printf("tam: %ld\n", tam);
+			buffer[tam-1] = '\0';
+			
+			if (strcmp(buffer, "") != 0){
+				printf("CONSOLE_PIPE: %s\n", buffer);
+				
+				Node * newNode = (Node*) malloc(sizeof(Node*));
+				newNode->data = (char*) malloc(sizeof(char*));
+				strcpy(newNode->data, buffer);
+				newNode->next = NULL;
+				newNode->prev = NULL;
+				
+				pthread_mutex_lock(&mutex_queue);
+				
+				if (internalQ->count == sh_var->QUEUE_SZ) {
+					printf("FILA CHEIA!\n");
+				}
+				
+				sem_wait(sem_qsize);
+				
+				printf("ENTROU NA FILA\n");
+	
+				if (internalQ->count == 0){
+					internalQ->head = newNode;
+					internalQ->tail = newNode;
+					internalQ->count++;
+				} else {
+					internalQ->head->next = newNode;
+					newNode->prev = internalQ->head;
+					internalQ->head = newNode;
+					internalQ->count++;
+				}
+				
+				sem_post(sem_qcons);
+				
+				pthread_mutex_unlock(&mutex_queue);
+				memset(buffer, 0, 1024);
+				
+			}
+		} while(tam > 0);
+		
 	}
 
     pthread_exit(NULL);
@@ -161,71 +157,67 @@ void * sensor_reader(void * id_t) {
 
     write_logfile("THREAD SENSOR_READER CREATED\n");
 
-	// Opens the pipe for reading
-	int fd;
-	if ((fd = open("SENSOR_PIPE", O_RDONLY|O_NONBLOCK)) < 0) {
-		perror("Cannot open pipe for reading: ");
-		exit(0);
-	}
 	char buffer[1024] = "";
 	
 	while(1){
-		/*
-		//sem_wait(mutex_shm);
-		if (sh_var->terminate == 1){
-			unlink("SENSOR_PIPE");
-			close(fd);
-			write_logfile("THREAD SENSOR_READER EXITING\n");
-			pthread_exit(NULL);
+		
+		long tam; 
+		
+		// Opens the pipe for reading
+		int fd;
+		if ((fd = open("SENSOR_PIPE", O_RDONLY)) < 0) {
+			perror("Cannot open pipe for reading: ");
+			exit(0);
 		}
-		//sem_post(mutex_shm);
-		*/
 		
-		long tam = read(fd, buffer, 1024);
-		buffer[tam-1] = '\0';
-		
-		if (strcmp(buffer, "") != 0){
-			printf("SENSOR_PIPE: %s\n", buffer);
+		do {
+			tam = read(fd, buffer, 1024);
+			buffer[tam-1] = '\0';
 			
-			Node * newNode = (Node*) malloc(sizeof(Node*));
-			newNode->data = (char*) malloc(sizeof(char*));
-			strcpy(newNode->data, buffer);
-			newNode->next = NULL;
-			newNode->prev = NULL;
-			
-			pthread_mutex_lock(&mutex_queue);
-			
-			int value;
-			sem_getvalue(sem_qsize, &value);
-			if (value != 0)
-			{
-				printf("entrou semaforo\n");
-				sem_wait(sem_qsize);
-			}
-			printf("VALUE >>>>>>> %d\n", value);
-			if (internalQ->count == sh_var->QUEUE_SZ) {
-				printf("FILA CHEIA!\n");
-			} else {
-				printf("ENTROU NA FILA\n");
-
-				if (internalQ->count == 0){
-					internalQ->head = newNode;
-					internalQ->tail = newNode;
-					internalQ->count++;
-				} else {
-					newNode->next = internalQ->tail;
-					internalQ->tail->prev = newNode;
-					internalQ->tail = newNode;
-					internalQ->count++;
+			if (strcmp(buffer, "") != 0){
+				printf("SENSOR_PIPE: %s\n", buffer);
+				
+				Node * newNode = (Node*) malloc(sizeof(Node*));
+				newNode->data = (char*) malloc(sizeof(char*));
+				strcpy(newNode->data, buffer);
+				newNode->next = NULL;
+				newNode->prev = NULL;
+				
+				pthread_mutex_lock(&mutex_queue);
+				
+				int value;
+				sem_getvalue(sem_qsize, &value);
+				if (value != 0)
+				{
+					//printf("entrou semaforo\n");
+					sem_wait(sem_qsize);
 				}
+				//printf("VALUE >>>>>>> %d\n", value);
+				if (internalQ->count == sh_var->QUEUE_SZ) {
+					printf("FILA CHEIA!\n");
+				} else {
+					printf("ENTROU NA FILA\n");
+	
+					if (internalQ->count == 0){
+						internalQ->head = newNode;
+						internalQ->tail = newNode;
+						internalQ->count++;
+					} else {
+						newNode->next = internalQ->tail;
+						internalQ->tail->prev = newNode;
+						internalQ->tail = newNode;
+						internalQ->count++;
+					}
+					sem_post(sem_qcons);
+				}
+				
+				
+				
+				pthread_mutex_unlock(&mutex_queue);
+				
+				memset(buffer, 0, 1024);
 			}
-			
-			sem_post(sem_qcons);
-			
-			pthread_mutex_unlock(&mutex_queue);
-			
-			memset(buffer, 0, 1024);
-		}
+		} while (tam > 0);
 	}
 	
     pthread_exit(NULL);
