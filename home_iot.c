@@ -46,6 +46,8 @@ void exit_home_iot(){
 	
 	pthread_mutex_destroy(&mutex_queue);
 	
+	shmdt(sh_var->workers);
+	shmctl(shwid, IPC_RMID, NULL);
 	shmdt(sh_var);
 	shmctl(shmid, IPC_RMID, NULL);
 	
@@ -241,7 +243,7 @@ void * dispatcher(void * id_t) {
 		
 		int value;
 		sem_getvalue(sem_qcons, &value);
-		printf(">> %d\n", value);
+		//printf(">> %d\n", value);
 		sem_wait(sem_qcons);
 		
 		pthread_mutex_lock(&mutex_queue);
@@ -289,7 +291,7 @@ int create_procs_threads() {
     }
     
 	
-	printf("teste\n");
+	//printf("teste\n");
 	
 	sem_wait(mutex_shm);
     // Create Console Reader thread
@@ -331,12 +333,12 @@ int main(int argc, char *argv[]) {
     int failure = 0;
 
     if (argc != 2) {
-        printf("Error! %d\n", argc);
+        printf("Wrong argc! %d\n", argc);
         return -1;
     }
 
     // Create Shared Memory
-    shmid = shmget(IPC_PRIVATE, sizeof(int), IPC_CREAT|0777);
+    shmid = shmget(IPC_PRIVATE, sizeof(Shared_var *), IPC_CREAT|0777);
 
     // Attach shared memory
 	sh_var = (Shared_var *) shmat(shmid, NULL, 0);
@@ -364,6 +366,15 @@ int main(int argc, char *argv[]) {
     }
     
     sh_var->N_WORKERS = N_WORKERS;
+    
+    shwid = shmget(IPC_PRIVATE, sizeof(Worker *) * N_WORKERS, IPC_CREAT|0777);
+    sh_var->workers = (Worker*) shmat(shwid, NULL, 0);
+    
+    int j;
+    for (j = 0; j < N_WORKERS; j++) {
+    	sh_var->workers[j].id = j+1; 
+    	sh_var->workers[j].active = 0;
+    }
 
     fgets(line, 30, config);
     int MAX_KEYS = atoi(line);

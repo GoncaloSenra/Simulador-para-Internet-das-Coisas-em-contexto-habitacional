@@ -32,6 +32,11 @@ typedef struct {
     int count;
 } Queue;
 
+typedef struct {
+    int id;
+    int active;
+} Worker;
+
 typedef struct shared_memory{
     int N_WORKERS;
     int QUEUE_SZ;
@@ -46,6 +51,7 @@ typedef struct shared_memory{
 	pthread_t sensor_reader_t;
 	pthread_t dispatcher_t;
 	
+	Worker * workers;
 	
 } Shared_var;
 
@@ -54,6 +60,7 @@ Shared_var* sh_var;
 Queue* internalQ;
 
 int shmid;
+int shwid;
 sem_t *mutex_shm;
 sem_t *mutex_log;
 sem_t *sem_qsize;

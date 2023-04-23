@@ -13,6 +13,8 @@ int worker(int id) {
 
     sem_wait(mutex_shm);
 	sh_var->teste++;
+	//sh_var->N_WORKERS--;
+	sh_var->workers[id-1].active = 1;
     printf("TESTE: %d\n", sh_var->teste);
     sem_post(mutex_shm);
 
