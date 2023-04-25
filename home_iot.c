@@ -46,8 +46,19 @@ void exit_home_iot(){
 	
 	pthread_mutex_destroy(&mutex_queue);
 	
+	int i;
+	for (i = 0; i < sh_var->N_WORKERS; i++) {
+		kill(sh_var->workers[i].pid, SIGKILL);
+	}
+	
 	shmdt(sh_var->workers);
 	shmctl(shwid, IPC_RMID, NULL);
+	shmdt(sh_var->sensors);
+	shmctl(shsid, IPC_RMID, NULL);
+	shmdt(sh_var->keys);
+	shmctl(shkid, IPC_RMID, NULL);
+	shmdt(sh_var->alerts);
+	shmctl(shaid, IPC_RMID, NULL);
 	shmdt(sh_var);
 	shmctl(shmid, IPC_RMID, NULL);
 	
@@ -180,8 +191,9 @@ void * sensor_reader(void * id_t) {
 				printf("SENSOR_PIPE: %s\n", buffer);
 				
 				Node * newNode = (Node*) malloc(sizeof(Node*));
-				newNode->data = (char*) malloc(sizeof(char*));
-				strcpy(newNode->data, buffer);
+				newNode->data = (char*) malloc(1024);
+				
+				sprintf(newNode->data, "SENSOR#%s", buffer);
 				newNode->next = NULL;
 				newNode->prev = NULL;
 				
@@ -213,10 +225,8 @@ void * sensor_reader(void * id_t) {
 					sem_post(sem_qcons);
 				}
 				
-				
-				
 				pthread_mutex_unlock(&mutex_queue);
-				
+				//free(aux);
 				memset(buffer, 0, 1024);
 			}
 		} while (tam > 0);
@@ -229,6 +239,10 @@ void * dispatcher(void * id_t) {
 
     write_logfile("THREAD DISPATCHER CREATED\n");
 	
+	int i;
+	for (i = 0; i < sh_var->N_WORKERS; i++) {
+		close(channels[i][0]);
+	}
 		
 	while(1){
 		/*
@@ -265,6 +279,17 @@ void * dispatcher(void * id_t) {
 		
 		printf("[DISPATCHER]: CONSUMED MESSAGE %s\n", no->data);
 		
+		sem_wait(mutex_shm);
+		int k;
+		for (k = 0; k < sh_var->N_WORKERS; k++) {
+			if (sh_var->workers[k].active == 0) {
+				printf("====%d\n", k);
+				write(channels[k][1], no->data, 1024);
+				break;
+			}
+		}
+		sem_post(mutex_shm);
+		
 		free(no);
 		
 		
@@ -279,6 +304,7 @@ int create_procs_threads() {
     int i;
     for (i = 0; i < sh_var->N_WORKERS; i++) {
         if (fork() == 0) {
+        	signal(SIGINT, SIG_IGN);
             worker(i + 1);
             exit(0);
         }
@@ -286,6 +312,7 @@ int create_procs_threads() {
 
     // Create Alerts_Watcher
     if (fork() == 0) {
+    	signal(SIGINT, SIG_IGN);
         alerts_watcher(0);
         exit(0);
     }
@@ -367,7 +394,8 @@ int main(int argc, char *argv[]) {
     
     sh_var->N_WORKERS = N_WORKERS;
     
-    shwid = shmget(IPC_PRIVATE, sizeof(Worker *) * N_WORKERS, IPC_CREAT|0777);
+    // Create shared memory for workers info
+    shwid = shmget(IPC_PRIVATE, sizeof(Worker) * N_WORKERS, IPC_CREAT|0777);
     sh_var->workers = (Worker*) shmat(shwid, NULL, 0);
     
     int j;
@@ -385,7 +413,19 @@ int main(int argc, char *argv[]) {
     }
 
     sh_var->MAX_KEYS = MAX_KEYS;
+	
+	// Create shared memory for keys info
+    shkid = shmget(IPC_PRIVATE, sizeof(Key) * MAX_KEYS, IPC_CREAT|0777);
+    sh_var->keys = (Key*) shmat(shkid, NULL, 0);
 
+    
+    for (j = 0; j < MAX_KEYS; j++) {
+    	sh_var->keys[j].id = ""; 
+    	//continue;
+    }
+    
+    
+	
     fgets(line, 30, config);
     int MAX_SENSORS = atoi(line);
 
@@ -395,6 +435,14 @@ int main(int argc, char *argv[]) {
     }
 
     sh_var->MAX_SENSORS = MAX_SENSORS;
+    
+    // Create shared memory for sensors info
+    shsid = shmget(IPC_PRIVATE, sizeof(Sensor) * MAX_SENSORS, IPC_CREAT|0777);
+    sh_var->sensors = (Sensor*) shmat(shsid, NULL, 0);
+    
+    for (j = 0; j < MAX_SENSORS; j++) {
+    	sh_var->sensors[j].id = ""; 
+    }
 
     fgets(line, 30, config);
     int MAX_ALERTS = atoi(line);
@@ -405,6 +453,14 @@ int main(int argc, char *argv[]) {
     }
 
     sh_var->MAX_ALERTS = MAX_ALERTS;
+    
+    // Create shared memory for alerts info
+    shaid = shmget(IPC_PRIVATE, sizeof(Alert) * MAX_ALERTS, IPC_CREAT|0777);
+    sh_var->alerts = (Alert*) shmat(shaid, NULL, 0);
+
+	 for (j = 0; j < MAX_ALERTS; j++) {
+    	sh_var->alerts[j].id = ""; 
+    }
 
     fclose(config);
 
@@ -432,16 +488,30 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	
+	// Creates the (N_WORKERS) unamed pipes
+	
+	channels = (int**)malloc(N_WORKERS * sizeof(int*));
+	
+	int k;
+	for (k = 0; k < N_WORKERS; k++) {
+		channels[k] = (int*)malloc(2 * sizeof(int));
+	}
+	
+	for (k = 0; k < N_WORKERS; k++) {
+		pipe(channels[k]);
+	}
+	
+	
 	// Create the INTERNAL_QUEUE
 	internalQ = (Queue*) malloc(sizeof(Queue*));
 	internalQ->head = NULL;
 	internalQ->tail = NULL;
 	internalQ->count = 0;
 	
-	Node * no = (Node *) malloc(sizeof(Node*));
+	//Node * no = (Node *) malloc(sizeof(Node*));
 	//no->data = strdup("HELLOOOOO\n");
 	
-	internalQ->head = no;
+	//internalQ->head = no;
 	
 
     write_logfile("HOME_IOT SIMULATOR STARTING\n");

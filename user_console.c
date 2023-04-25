@@ -31,7 +31,13 @@ int main(int argc, char *argv[]) {
         printf("Error!\n");
         return -1;
     } else{
-        printf("Welcome %s!\n", argv[1]);
+		int tam = atoi(argv[1]);
+		if (tam > 0) {
+        	printf("Welcome %s!\n", argv[1]);
+    	} else {
+    		printf("The ID must be a number greater than zero!\n");
+    		return -1;
+    	}
     }
     
     // Opens the pipe for writing

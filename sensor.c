@@ -44,6 +44,7 @@ int main(int argc, char *argv[]) {
 
     if (strlen(argv[1]) < 3 || strlen(argv[1]) > 32) {
         printf("ID wrong size!\n");
+        return -1;
     }
 
     for (i = 0; i < strlen(argv[1]); i++){
@@ -55,6 +56,7 @@ int main(int argc, char *argv[]) {
 
     if (strlen(argv[3]) < 3 || strlen(argv[3]) > 32) {
         printf("CHAVE wrong size!\n");
+        return -1;
     }
 
     for (i = 0; i < strlen(argv[3]); i++){
@@ -76,6 +78,7 @@ int main(int argc, char *argv[]) {
     int sec = atoi(argv[2]);
     if (sec < 0) {
         printf("Intervalo de segundos must be a number!\n");
+        return -1;
     }
 
     // Verifiar se Min é um número interiro
@@ -99,6 +102,7 @@ int main(int argc, char *argv[]) {
 
     if (min > max) {
         printf("Max must be higher then min\n");
+        return -1;
     }
 
 	// Opens the pipe for writing

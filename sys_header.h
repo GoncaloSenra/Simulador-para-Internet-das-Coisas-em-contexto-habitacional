@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/wait.h>
@@ -33,9 +34,31 @@ typedef struct {
 } Queue;
 
 typedef struct {
+	pid_t pid; 
     int id;
     int active;
 } Worker;
+
+typedef struct { 
+    char * id;
+    int last_value;
+    int max;
+    int min;
+    double avg;
+    int count;
+} Key;
+
+typedef struct {
+	char * id;
+	
+} Sensor;
+
+typedef struct {
+	char * id;
+	char * key;
+	int min;
+	int max;
+} Alert;
 
 typedef struct shared_memory{
     int N_WORKERS;
@@ -52,20 +75,33 @@ typedef struct shared_memory{
 	pthread_t dispatcher_t;
 	
 	Worker * workers;
+	Sensor * sensors;
+	Key * keys;
+	Alert * alerts;
 	
 } Shared_var;
 
+// Shared memory
 Shared_var* sh_var;
 
+// Unnamed pipes file decriptors
+int ** channels;
+
+// Internal Queue
 Queue* internalQ;
 
-int shmid;
-int shwid;
+// IDs of the different blocks of shared memory
+int shmid; //main block
+int shwid; // workers
+int shsid; // sensors
+int shkid; // keys
+int shaid; // alerts
+
+// Semaphores
 sem_t *mutex_shm;
 sem_t *mutex_log;
 sem_t *sem_qsize;
 sem_t *sem_qcons;
-
 
 
 
