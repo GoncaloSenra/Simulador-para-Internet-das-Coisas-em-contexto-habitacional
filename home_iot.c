@@ -3,6 +3,8 @@
 
 #include "sys_header.h"
 
+#define MSG_KEY 1234
+
 static FILE * log = NULL;
 
 pthread_mutex_t mutex_queue = PTHREAD_MUTEX_INITIALIZER;
@@ -61,6 +63,8 @@ void exit_home_iot(){
 	shmctl(shaid, IPC_RMID, NULL);
 	shmdt(sh_var);
 	shmctl(shmid, IPC_RMID, NULL);
+	
+	msgctl(mqid, IPC_RMID, 0);
 	
 	free(internalQ);
 
@@ -127,7 +131,7 @@ void * console_reader(void * id_t) {
 				printf("CONSOLE_PIPE: %s\n", buffer);
 				
 				Node * newNode = (Node*) malloc(sizeof(Node*));
-				newNode->data = (char*) malloc(sizeof(char*));
+				newNode->data = (char*) malloc(1024);
 				strcpy(newNode->data, buffer);
 				newNode->next = NULL;
 				newNode->prev = NULL;
@@ -255,8 +259,8 @@ void * dispatcher(void * id_t) {
 		//sem_post(mutex_shm);
 		*/
 		
-		int value;
-		sem_getvalue(sem_qcons, &value);
+		//int value;
+		//sem_getvalue(sem_qcons, &value);
 		//printf(">> %d\n", value);
 		sem_wait(sem_qcons);
 		
@@ -508,11 +512,13 @@ int main(int argc, char *argv[]) {
 	internalQ->tail = NULL;
 	internalQ->count = 0;
 	
-	//Node * no = (Node *) malloc(sizeof(Node*));
-	//no->data = strdup("HELLOOOOO\n");
+	// Create the Message Queue
+	if((mqid = msgget(MSG_KEY , IPC_CREAT|0777)) < 0) {
+		perror("Error creating message queue!\n");
+		exit(0);
+	}
 	
-	//internalQ->head = no;
-	
+	//printf("----> %d\n", mqid);
 
     write_logfile("HOME_IOT SIMULATOR STARTING\n");
     

@@ -42,8 +42,10 @@ int worker(int id) {
  
         char* token;
         token = strtok(buffer, "#\n");
+        
+        puts(token);
 
-        if (strcmp(token, "SENSOR") == 0) 
+        if (strcmp(token, "SENSOR") == 0)
         {
         	token = strtok(NULL, "#\n");
 
@@ -113,7 +115,42 @@ int worker(int id) {
 			
 			sem_post(mutex_shm);
         } else {
-        	printf("BBBBBB\n");
+
+        	int id = atoi(token);
+        	token = strtok(NULL, "#\n");
+        	
+        	if (strcmp(token, "STATS") == 0) {
+        		char text[1024];
+        		strcpy(text, "Key\t\t\tLast\tMin\tMax\tAvg\tCount\n");
+        		sem_wait(mutex_shm);
+        		int j;
+   				
+   				char temp[1024];
+				//temp = (char *) malloc(1024);
+   				
+   				for (j = 0; j < sh_var->MAX_KEYS; j++) {
+   					if (strcmp(sh_var->keys[j].id, "") == 0) {
+   						break;
+   					} else {
+   						sprintf(temp, "%s\t\t%d\t%d\t%d\t%0.3f\t%d\n", sh_var->keys[j].id, sh_var->keys[j].last_value, sh_var->keys[j].min, sh_var->keys[j].max, sh_var->keys[j].avg, sh_var->keys[j].count);
+   						//temp[strlen(temp) - 1] = '\0';
+   						puts(temp);
+   						strcat(text, temp);
+   						memset(temp, 0, 1024);
+   					}
+   				}
+   				
+   				Message msg;
+        		
+        		msg.msgtype = (long) id;
+        		strcpy(msg.buffer, text);
+        		
+        		msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
+        		
+        		sem_post(mutex_shm);
+        		
+        	}
+        	
         }
     
     	

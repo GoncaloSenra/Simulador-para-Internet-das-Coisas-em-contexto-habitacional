@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <signal.h>
 #include <pthread.h>
+#include <sys/msg.h>
 
 typedef struct Node {
     char * data;
@@ -32,6 +33,11 @@ typedef struct {
     Node* tail;
     int count;
 } Queue;
+
+typedef struct {
+    long msgtype;
+    char buffer[1024];
+} Message;
 
 typedef struct {
 	pid_t pid; 
@@ -96,6 +102,9 @@ int shwid; // workers
 int shsid; // sensors
 int shkid; // keys
 int shaid; // alerts
+
+// Message Queue ID
+int mqid;
 
 // Semaphores
 sem_t *mutex_shm;

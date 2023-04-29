@@ -16,11 +16,11 @@
 #include <time.h>
 #include <signal.h>
 
-sem_t * mutex_pipe;
+//sem_t * mutex_pipe;
 int num_msg = 0;
 
 void sigint(){
-	sem_close(mutex_pipe);
+	//sem_close(mutex_pipe);
 	printf("\nSensor terminating!\n");
 	exit(0);
 }
@@ -115,8 +115,8 @@ int main(int argc, char *argv[]) {
 	char buffer[1024] = "";
 		
 	// Create Semaphore
-    sem_unlink("MUTEX_SENSOR_PIPE");
-	mutex_pipe = sem_open("MUTEX_SENSOR_PIPE", O_CREAT|O_EXCL, 0777, 1);
+    //sem_unlink("MUTEX_SENSOR_PIPE");
+	//mutex_pipe = sem_open("MUTEX_SENSOR_PIPE", O_CREAT|O_EXCL, 0777, 1);
 
 	srand(time(NULL));
 	int errPipe = 1; 
@@ -128,10 +128,10 @@ int main(int argc, char *argv[]) {
 		
 		sprintf(buffer, "%s#%s#%d", argv[1], argv[3], num);
 		
-		sem_wait(mutex_pipe);
+		//sem_wait(mutex_pipe);
 		//printf("aqui1\n");
         errPipe = write(fd, &buffer, 1024);        
-		sem_post(mutex_pipe);
+		//sem_post(mutex_pipe);
 		
 		//printf("status code : %d\n", errPipe);
 		
