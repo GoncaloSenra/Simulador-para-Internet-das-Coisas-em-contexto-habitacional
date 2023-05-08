@@ -46,7 +46,12 @@ void exit_home_iot(){
 	sem_close(sem_qcons);
 	sem_unlink("SEM_QCONS");
 	
+	sem_close(active_workers);
+	sem_unlink("A_WORKERS");
+	
 	pthread_mutex_destroy(&mutex_queue);
+	pthread_mutex_destroy(&sh_var->mutex_cond);
+	pthread_cond_destroy(&sh_var->sens_watcher);
 	
 	int i;
 	for (i = 0; i < sh_var->N_WORKERS; i++) {
@@ -133,6 +138,7 @@ void * console_reader(void * id_t) {
 				Node * newNode = (Node*) malloc(sizeof(Node*));
 				newNode->data = (char*) malloc(1024);
 				strcpy(newNode->data, buffer);
+				newNode->isSensor = 0;
 				newNode->next = NULL;
 				newNode->prev = NULL;
 				
@@ -151,9 +157,30 @@ void * console_reader(void * id_t) {
 					internalQ->tail = newNode;
 					internalQ->count++;
 				} else {
+				/*
 					internalQ->head->next = newNode;
 					newNode->prev = internalQ->head;
 					internalQ->head = newNode;
+				*/
+					Node * temp = internalQ->head;
+					while (temp != NULL && temp->isSensor == 0) {
+						temp = temp->prev;
+					}
+					if (temp == NULL) {
+						newNode->next = internalQ->tail;
+						internalQ->tail->prev = newNode;
+						internalQ->tail = newNode;
+					} else if (temp->next == NULL) {
+						temp->next = newNode;
+						newNode->prev = temp;
+						internalQ->head = newNode;
+					} else {
+						newNode->prev = temp;
+						newNode->next = temp->next;
+						temp->next->prev = newNode;
+						temp->next = newNode;
+					}
+					
 					internalQ->count++;
 				}
 				
@@ -198,6 +225,7 @@ void * sensor_reader(void * id_t) {
 				newNode->data = (char*) malloc(1024);
 				
 				sprintf(newNode->data, "SENSOR#%s", buffer);
+				newNode->isSensor = 1;
 				newNode->next = NULL;
 				newNode->prev = NULL;
 				
@@ -266,7 +294,8 @@ void * dispatcher(void * id_t) {
 		
 		pthread_mutex_lock(&mutex_queue);
 		
-		Node * no = internalQ->head;
+		Node * no = (Node *) malloc(sizeof(Node));
+		memcpy(no, internalQ->head, sizeof(Node));
 		if (internalQ->count == 1) {
 			internalQ->head = NULL;
 			internalQ->tail = NULL;
@@ -281,11 +310,15 @@ void * dispatcher(void * id_t) {
 		
 		sem_post(sem_qsize);
 		
-		printf("[DISPATCHER]: CONSUMED MESSAGE %s\n", no->data);
 		
+		// Se nao houver worker livre espera
+
+		sem_wait(active_workers);
 		sem_wait(mutex_shm);
+		printf("[DISPATCHER]: CONSUMED MESSAGE %s\n", no->data);
 		int k;
 		for (k = 0; k < sh_var->N_WORKERS; k++) {
+			//printf("teste %d\n", sh_var->workers[k].active);
 			if (sh_var->workers[k].active == 0) {
 				printf("====%d\n", k);
 				write(channels[k][1], no->data, 1024);
@@ -358,6 +391,8 @@ int main(int argc, char *argv[]) {
 	//terminates when CTRL-C is pressed
 	signal(SIGINT,sigint);
 
+	printf("pid: %d\n", getpid());
+
     log = fopen("log.txt", "w");
     fclose(log);
 
@@ -422,14 +457,7 @@ int main(int argc, char *argv[]) {
     shkid = shmget(IPC_PRIVATE, sizeof(Key) * MAX_KEYS, IPC_CREAT|0777);
     sh_var->keys = (Key*) shmat(shkid, NULL, 0);
 
-    
-    for (j = 0; j < MAX_KEYS; j++) {
-    	sh_var->keys[j].id = ""; 
-    	//continue;
-    }
-    
-    
-	
+    	
     fgets(line, 30, config);
     int MAX_SENSORS = atoi(line);
 
@@ -443,10 +471,6 @@ int main(int argc, char *argv[]) {
     // Create shared memory for sensors info
     shsid = shmget(IPC_PRIVATE, sizeof(Sensor) * MAX_SENSORS, IPC_CREAT|0777);
     sh_var->sensors = (Sensor*) shmat(shsid, NULL, 0);
-    
-    for (j = 0; j < MAX_SENSORS; j++) {
-    	sh_var->sensors[j].id = ""; 
-    }
 
     fgets(line, 30, config);
     int MAX_ALERTS = atoi(line);
@@ -462,9 +486,6 @@ int main(int argc, char *argv[]) {
     shaid = shmget(IPC_PRIVATE, sizeof(Alert) * MAX_ALERTS, IPC_CREAT|0777);
     sh_var->alerts = (Alert*) shmat(shaid, NULL, 0);
 
-	 for (j = 0; j < MAX_ALERTS; j++) {
-    	sh_var->alerts[j].id = ""; 
-    }
 
     fclose(config);
 
@@ -479,6 +500,8 @@ int main(int argc, char *argv[]) {
 	sem_qsize = sem_open("SEM_QSIZE", O_CREAT|O_EXCL, 0777, sh_var->QUEUE_SZ);
 	sem_unlink("SEM_QCONS");
 	sem_qcons = sem_open("SEM_QCONS", O_CREAT|O_EXCL, 0777, 0);
+	sem_unlink("A_WORKERS");
+	active_workers = sem_open("A_WORKERS", O_CREAT|O_EXCL, 0777, sh_var->N_WORKERS);
 	
 	
 	// Creates the named pipe if it doesn't exist yet
@@ -518,7 +541,9 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	
-	//printf("----> %d\n", mqid);
+	// Initialize cond var
+	sh_var->sens_watcher = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
+	sh_var->mutex_cond = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
 
     write_logfile("HOME_IOT SIMULATOR STARTING\n");
     

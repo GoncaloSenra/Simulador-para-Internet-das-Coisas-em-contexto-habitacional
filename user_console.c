@@ -15,6 +15,7 @@
 #include <ctype.h>
 #include <signal.h>
 #include <sys/msg.h>
+#include <pthread.h>
 
 #define MSG_KEY 1234
 
@@ -25,14 +26,32 @@ typedef struct {
 
 int mqid;
 
+pthread_t mess_receiver_t;
+
 //sem_t * mutex_pipe;
 
 void sigint(){
 	//sem_close(mutex_pipe);
-	msgctl(mqid, IPC_RMID, 0);
+	//msgctl(mqid, IPC_RMID, 0);
+	pthread_cancel(mess_receiver_t);
 	printf("\nUser_console terminating!\n");
 	exit(0);
 }
+
+void * message_receiver(void * id_t) {
+
+	int user_id = *((int *)id_t);
+
+	Message msg;
+
+	while(1) {
+		msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) user_id, 0);
+        //printf("RCV: %d\n", msg.buffer);
+        puts(msg.buffer);
+        printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n");
+	}
+}
+
 
 int main(int argc, char *argv[]) {
 	
@@ -64,7 +83,8 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	
-	printf("----> %d\n", mqid);
+	int mr_id = 1;
+    pthread_create(&mess_receiver_t, NULL, message_receiver, &mr_id);
 
 	char buffer[1024] = "";
 	
@@ -78,7 +98,7 @@ int main(int argc, char *argv[]) {
     char option[100];
     while(fgets(option, 100, stdin)) {
     
-    	Message msg;
+    	//Message msg;
 
         char* tokens [5];
  
@@ -113,9 +133,9 @@ int main(int argc, char *argv[]) {
                 sprintf(buffer, "%s#STATS", argv[1]);
                 errPipe = write(fd, &buffer, 1024);
                 
-                msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
+                //msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
                 //printf("RCV: %d\n", msg.buffer);
-                puts(msg.buffer);
+                //puts(msg.buffer);
             }
         } else if (strcmp(tokens[0], "reset") == 0) {
             if (count != 1) {
@@ -172,16 +192,21 @@ int main(int argc, char *argv[]) {
 
             if (notValid == 0){
                 sprintf(buffer, "%s#ADD_ALERT#%s#%s#%s#%s", argv[1], tokens[1], tokens[2], tokens[3], tokens[4]);
-                errPipe = write(fd, &buffer, 1024);
-                
+                errPipe = write(fd, &buffer, 1024);   
             }
+            
+            //msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
+		    //printf("RCV: %s\n", msg.buffer);
+		    //puts(msg.buffer);
+            
         } else if (strcmp(tokens[0], "remove_alert") == 0) {
             if (count != 2) {
                 printf("Not valid!\n");
                 notValid = 1;
             }
             if (notValid == 0) {
-                printf("Not implemented!");
+                sprintf(buffer, "%s#REMOVE_ALERT#%s", argv[1], tokens[1]);
+                errPipe = write(fd, &buffer, 1024);  
             }
         } else if (strcmp(tokens[0], "list_alerts") == 0) {
             if (count != 1) {
@@ -189,7 +214,12 @@ int main(int argc, char *argv[]) {
                 notValid = 1;
             }
             if (notValid == 0) {
-                printf("Not implemented!");
+                sprintf(buffer, "%s#LIST_ALERTS", argv[1]);
+                errPipe = write(fd, &buffer, 1024);  
+                
+                //msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
+				//printf("RCV: %s\n", msg.buffer);
+				//puts(msg.buffer);
             }
         } else {
             printf("Not valid!\n");
@@ -202,7 +232,6 @@ int main(int argc, char *argv[]) {
 			sigint();
 		}
         // Print MENU
-        printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n> ");
 		memset(buffer, 0, 1024);
     }
 

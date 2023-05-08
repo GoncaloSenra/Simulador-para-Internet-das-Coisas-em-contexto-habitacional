@@ -1,3 +1,7 @@
+#ifndef SYS_HEADER_H
+#define SYS_HEADER_H
+
+
 // Gonçalo Senra    2020213750
 // Rui Coelho       2021235407
 
@@ -24,6 +28,7 @@
 
 typedef struct Node {
     char * data;
+    int isSensor;
     struct Node* next;
     struct Node* prev;
 } Node;
@@ -46,7 +51,7 @@ typedef struct {
 } Worker;
 
 typedef struct { 
-    char * id;
+    char id[200];
     int last_value;
     int max;
     int min;
@@ -55,13 +60,13 @@ typedef struct {
 } Key;
 
 typedef struct {
-	char * id;
-	
+	char id[200];
 } Sensor;
 
 typedef struct {
-	char * id;
-	char * key;
+	char id[200];
+	char key[200];
+	int id_user;
 	int min;
 	int max;
 } Alert;
@@ -84,6 +89,10 @@ typedef struct shared_memory{
 	Sensor * sensors;
 	Key * keys;
 	Alert * alerts;
+	
+	// Cond Var
+	pthread_cond_t sens_watcher;
+	pthread_mutex_t mutex_cond;
 	
 } Shared_var;
 
@@ -111,7 +120,7 @@ sem_t *mutex_shm;
 sem_t *mutex_log;
 sem_t *sem_qsize;
 sem_t *sem_qcons;
-
+sem_t *active_workers;
 
 
 void write_logfile(char * message);
@@ -119,3 +128,8 @@ void write_logfile(char * message);
 int worker(int id);
 
 int alerts_watcher(int id);
+
+
+#endif
+
+
