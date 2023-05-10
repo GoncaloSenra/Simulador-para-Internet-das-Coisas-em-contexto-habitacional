@@ -113,10 +113,6 @@ int main(int argc, char *argv[]) {
 	}
 
 	char buffer[1024] = "";
-		
-	// Create Semaphore
-    //sem_unlink("MUTEX_SENSOR_PIPE");
-	//mutex_pipe = sem_open("MUTEX_SENSOR_PIPE", O_CREAT|O_EXCL, 0777, 1);
 
 	srand(time(NULL));
 	int errPipe = 1; 
@@ -127,14 +123,9 @@ int main(int argc, char *argv[]) {
 		printf("%s - %d\n", argv[3],num);
 		
 		sprintf(buffer, "%s#%s#%d", argv[1], argv[3], num);
-		
-		//sem_wait(mutex_pipe);
-		//printf("aqui1\n");
+
         errPipe = write(fd, &buffer, 1024);        
-		//sem_post(mutex_pipe);
-		
-		//printf("status code : %d\n", errPipe);
-		
+
 		if (errPipe == -1) {
 			printf("ERROR: pipe does not exist\n");
 			sigint();

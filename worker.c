@@ -20,11 +20,10 @@ int worker(int id) {
     char buffer[1024];
 	
 	fd_set read_set;
-	
-	
     
     while (1) {
     	
+    	// The select function will unblock every two seconds to verify the termination order, if (sh_var->terminate == 1) then the process will terminate
     	struct timeval timeout;
 		timeout.tv_sec = 2;
 		timeout.tv_usec = 0;
@@ -49,21 +48,18 @@ int worker(int id) {
 			}
     	}
     		
-    	//buffer[tam -1] = '\0';
-
+		// Changes his state to busy
     	sem_wait(mutex_shm);
     	sh_var->workers[id-1].active = 1;
     	sem_post(mutex_shm);
     	
-    	printf("->WORKER[%d]: %s\n", id, buffer);
-		
-
+    	if (DEBUG) printf("->WORKER[%d]: %s\n", id, buffer);
  
         char* token;
         token = strtok(buffer, "#\n");
         
-        puts(token);
 
+		// Sensor Message
         if (strcmp(token, "SENSOR") == 0)
         {
         	token = strtok(NULL, "#\n");
@@ -78,20 +74,20 @@ int worker(int id) {
 
 				if (tam == 0) {
 					strcpy(sh_var->sensors[i].id, token);
-					//sh_var->sensors[i].id = strdup(token);
-					printf("NEW SENSOR\n");
+					if (DEBUG) printf("NEW SENSOR\n");
 
 					break;
 				} else {
 					if (strcmp(token, sh_var->sensors[i].id) == 0) {
-						printf("OLD SENSOR\n");
+						if (DEBUG) printf("OLD SENSOR\n");
 						break;
 					}
 				}
 			}
 			
+			int aux = i;
+			
 			token = strtok(NULL, "#\n");
-			puts(token);
 			int num = 0;
 			int new = 0;
 			for (i = 0; i < sh_var->MAX_KEYS; i++) {
@@ -101,12 +97,12 @@ int worker(int id) {
 					strcpy(sh_var->keys[i].id, token);
 					//sh_var->keys[i].id = strdup(token);
 					
-					printf("NEW KEY\n");
+					if (DEBUG) printf("NEW KEY\n");
 					new = 1;
 					break;
 				} else {
 					if (strcmp(token, sh_var->keys[i].id) == 0) {
-						printf("OLD KEY\n");
+						if (DEBUG) printf("OLD KEY\n");
 						break;
 					}
 				}
@@ -135,8 +131,12 @@ int worker(int id) {
 				sh_var->keys[num].avg = ((sh_var->keys[num].avg * (sh_var->keys[num].count - 1)) + value) / sh_var->keys[num].count;
 			}
 			
-			printf("STATS\nVALUE: %d\nMIN: %d\nMAX: %d\nAVG: %0.5f\nCOUNT: %d\n", sh_var->keys[num].last_value, sh_var->keys[num].min, sh_var->keys[num].max, sh_var->keys[num].avg , sh_var->keys[num].count);
+			if (DEBUG) printf("STATS\nVALUE: %d\nMIN: %d\nMAX: %d\nAVG: %0.5f\nCOUNT: %d\n", sh_var->keys[num].last_value, sh_var->keys[num].min, sh_var->keys[num].max, sh_var->keys[num].avg , sh_var->keys[num].count);
 			
+			
+			char mes[512];
+			sprintf(mes, "WORKER[%d]: %s DATA PROCESSING COMPLETED\n", id, sh_var->sensors[aux].id);
+			write_logfile(mes);
 			
 			sem_post(mutex_shm);
 			
@@ -144,8 +144,9 @@ int worker(int id) {
 	
 			pthread_mutex_unlock(&sh_var->mutex_cond);
         } else {
-
-        	int id = atoi(token);
+			// User Console Message
+				
+        	int id_user = atoi(token);
         	token = strtok(NULL, "#\n");
         	
         	if (strcmp(token, "STATS") == 0) {
@@ -155,14 +156,12 @@ int worker(int id) {
         		int j;
    				
    				char temp[1024];
-				//temp = (char *) malloc(1024);
    				
    				for (j = 0; j < sh_var->MAX_KEYS; j++) {
    					if (strcmp(sh_var->keys[j].id, "") == 0) {
    						break;
    					} else {
    						sprintf(temp, "%s\t\t%d\t%d\t%d\t%0.3f\t%d\n", sh_var->keys[j].id, sh_var->keys[j].last_value, sh_var->keys[j].min, sh_var->keys[j].max, sh_var->keys[j].avg, sh_var->keys[j].count);
-   						//temp[strlen(temp) - 1] = '\0';
    						puts(temp);
    						strcat(text, temp);
    						memset(temp, 0, 1024);
@@ -171,13 +170,16 @@ int worker(int id) {
    				
    				sem_post(mutex_shm);
    				
+   				char mes[100];
+   				sprintf(mes, "WORKER[%d]: STATS COMMAND (FROM USER %d) PROCESSING COMPLETED\n", id, id_user);
+   				write_logfile(mes);
+   				
    				Message msg;
-        		
-        		msg.msgtype = (long) id;
+
+        		msg.msgtype = (long) id_user;
         		strcpy(msg.buffer, text);
         		
         		msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
-        		//printf("SND STATUS: %d ERRNO: %d, mqid %d\n", teste, errno, mqid);
         		
         		
         	} else if (strcmp(token, "ADD_ALERT") == 0) {
@@ -214,7 +216,7 @@ int worker(int id) {
 						token = strtok(NULL, "#\n");
 						sh_var->alerts[j].max = atoi(token);
 						
-						sh_var->alerts[j].id_user = id;
+						sh_var->alerts[j].id_user = id_user;
 						break;
 					} else if (strcmp(sh_var->alerts[j].id, token) == 0) {
 						exists = 1;
@@ -226,7 +228,7 @@ int worker(int id) {
         		
         		Message msg;
         		
-        		msg.msgtype = (long) id;
+        		msg.msgtype = (long) id_user;
         		
         		if (exists == 1) {
         			strcpy(msg.buffer, "ERROR: ALREADY EXISTS");
@@ -237,6 +239,10 @@ int worker(int id) {
         		} else {
         			strcpy(msg.buffer, "OK");
         			msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
+        			
+        			char mes[512];
+	   				sprintf(mes, "WORKER[%d]: ADD_ALERT %s, %s %d to %d (FROM USER %d) PROCESSING COMPLETED\n", id, sh_var->alerts[j].id, sh_var->alerts[j].key, sh_var->alerts[j].min, sh_var->alerts[j].max, id_user);
+	   				write_logfile(mes);
         		}
         		
         	} else if(strcmp(token, "LIST_ALERTS") == 0){
@@ -259,9 +265,13 @@ int worker(int id) {
    				}
    				
    				sem_post(mutex_shm);
+   				
+   				char mes[100];
+   				sprintf(mes, "WORKER[%d]: LIST_ALERTS COMMAND (FROM USER %d) PROCESSING COMPLETED\n", id, id_user);
+   				write_logfile(mes);
    				Message msg;
         		
-        		msg.msgtype = (long) id;
+        		msg.msgtype = (long) id_user;
         		strcpy(msg.buffer, text);
         		
         		msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
@@ -293,9 +303,13 @@ int worker(int id) {
         		
         		sem_post(mutex_shm);
         		
+        		char mes[100];
+   				sprintf(mes, "WORKER[%d]: RESET COMMAND (FROM USER %d) PROCESSING COMPLETED\n", id, id_user);
+   				write_logfile(mes);
+        		
         		Message msg;
         		
-        		msg.msgtype = (long) id;
+        		msg.msgtype = (long) id_user;
         		strcpy(msg.buffer, "OK");
         		
         		msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
@@ -307,22 +321,26 @@ int worker(int id) {
 				sem_wait(mutex_shm);
 				int j;
 				char temp[1024];
-				//temp = (char *) malloc(1024);
 				
 				for (j = 0; j < sh_var->MAX_SENSORS; j++) {
 					if (strcmp(sh_var->sensors[j].id, "") != 0) {
 						sprintf(temp, "%s\n", sh_var->sensors[j].id);
-						//temp[strlen(temp) - 1] = '\0';
-						//puts(temp);
+
 						strcat(text, temp);
 						memset(temp, 0, 1024);
 					}
 				}
 				
 				sem_post(mutex_shm);
+				
+				char mes[100];
+   				sprintf(mes, "WORKER[%d]: SENSORS COMMAND (FROM USER %d) PROCESSING COMPLETED\n", id, id_user);
+   				write_logfile(mes);
+        		
+				
 				Message msg;
 				
-				msg.msgtype = (long) id;
+				msg.msgtype = (long) id_user;
 				strcpy(msg.buffer, text);
 				
 				msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
@@ -352,7 +370,7 @@ int worker(int id) {
         		
         		Message msg;
         		
-        		msg.msgtype = (long) id;
+        		msg.msgtype = (long) id_user;
         		
         		if (exists == 2) {
         			strcpy(msg.buffer, "ERROR: KEY NOT FOUND");
@@ -360,11 +378,17 @@ int worker(int id) {
         		} else {
         			strcpy(msg.buffer, "OK");
         			msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
+        			
+        			char mes[100];
+	   				sprintf(mes, "WORKER[%d]: REMOVE_ALERT %s (FROM USER %d) PROCESSING COMPLETED\n", id, token, id_user);
+	   				write_logfile(mes);
+		    		
         		}
         		
         	}
         }
 		
+		// Changes his state to available
     	sem_wait(mutex_shm);
     	sh_var->workers[id-1].active = 0;
     	sem_post(mutex_shm);

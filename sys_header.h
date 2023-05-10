@@ -1,7 +1,6 @@
 #ifndef SYS_HEADER_H
 #define SYS_HEADER_H
 
-
 // Gonçalo Senra    2020213750
 // Rui Coelho       2021235407
 
@@ -25,6 +24,8 @@
 #include <signal.h>
 #include <pthread.h>
 #include <sys/msg.h>
+
+#define DEBUG 0
 
 typedef struct Node {
     char * data;
@@ -101,7 +102,7 @@ typedef struct shared_memory{
 // Shared memory
 Shared_var* sh_var;
 
-// Unnamed pipes file decriptors
+// Unnamed pipes file descriptors
 int ** channels;
 
 // Internal Queue

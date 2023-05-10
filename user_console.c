@@ -28,11 +28,8 @@ int mqid;
 
 pthread_t mess_receiver_t;
 
-//sem_t * mutex_pipe;
 
 void sigint(){
-	//sem_close(mutex_pipe);
-	//msgctl(mqid, IPC_RMID, 0);
 	pthread_cancel(mess_receiver_t);
 	printf("\nUser_console terminating!\n");
 	exit(0);
@@ -46,6 +43,7 @@ void * message_receiver(void * id_t) {
 	int status;
 
 	while(1) {
+
 		status = msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) user_id, 0);
         if (status == -1) {
         	sigint();
@@ -89,22 +87,17 @@ int main(int argc, char *argv[]) {
 		exit(0);
 	}
 	
-	int mr_id = 1;
+	int mr_id = atoi(argv[1]);
     pthread_create(&mess_receiver_t, NULL, message_receiver, &mr_id);
 
 	char buffer[1024] = "";
 	
-	// Create Semaphore
-    //sem_unlink("MUTEX_CONSOLE_PIPE");
-	//mutex_pipe = sem_open("MUTEX_CONSOLE_PIPE", O_CREAT|O_EXCL, 0777, 1);
 
     // Print MENU
     printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n");
 
     char option[100];
     while(fgets(option, 100, stdin)) {
-    
-    	//Message msg;
 
         char* tokens [5];
  
@@ -139,9 +132,6 @@ int main(int argc, char *argv[]) {
                 sprintf(buffer, "%s#STATS", argv[1]);
                 errPipe = write(fd, &buffer, 1024);
                 
-                //msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
-                //printf("RCV: %d\n", msg.buffer);
-                //puts(msg.buffer);
             }
         } else if (strcmp(tokens[0], "reset") == 0) {
             if (count != 1) {
@@ -201,10 +191,6 @@ int main(int argc, char *argv[]) {
                 errPipe = write(fd, &buffer, 1024);   
             }
             
-            //msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
-		    //printf("RCV: %s\n", msg.buffer);
-		    //puts(msg.buffer);
-            
         } else if (strcmp(tokens[0], "remove_alert") == 0) {
             if (count != 2) {
                 printf("Not valid!\n");
@@ -222,16 +208,12 @@ int main(int argc, char *argv[]) {
             if (notValid == 0) {
                 sprintf(buffer, "%s#LIST_ALERTS", argv[1]);
                 errPipe = write(fd, &buffer, 1024);  
-                
-                //msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) atoi(argv[1]), 0);
-				//printf("RCV: %s\n", msg.buffer);
-				//puts(msg.buffer);
+
             }
         } else {
             printf("Not valid!\n");
         }
         
-        //printf("status code : %d\n", errPipe);
 
 		if (errPipe == -1) {
 			printf("ERROR: pipe does not exist\n");

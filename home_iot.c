@@ -18,10 +18,6 @@ void exit_home_iot(){
 	
 	sh_var->terminate=1;
 	
-	// ERROR: corrupted size vs. prev_size
-	printf("%ld\n", sh_var->dispatcher_t);
-
-	
     pthread_cancel(sh_var->console_reader_t);
 	write_logfile("THREAD CONSOLE_READER TERMINATED\n");
     
@@ -34,8 +30,6 @@ void exit_home_iot(){
 	sem_post(mutex_shm);
 	
 	write_logfile("HOME_IOT SIMULATOR CLOSING\n");
-	
-	write_logfile("TESTE1\n");
 	
 	int k;
 	for (k = 0; k < sh_var->N_WORKERS; k++) {
@@ -81,8 +75,6 @@ void exit_home_iot(){
 	
 	write_logfile(mes);
 	
-	write_logfile("TESTE1.5\n");
-	
 	// Remove resources
     sem_close(mutex_shm);
 	sem_unlink("MUTEX_SHM");
@@ -101,14 +93,12 @@ void exit_home_iot(){
 	
 	unlink("CONSOLE_PIPE");
 	unlink("SENSOR_PIPE");
-	
-	write_logfile("TESTE2\n");
+
 	
 	pthread_mutex_destroy(&mutex_queue);
 	pthread_mutex_destroy(&sh_var->mutex_cond);
 	pthread_cond_destroy(&sh_var->sens_watcher);
-	
-	write_logfile("TESTE3\n");
+
 	
 	shmdt(sh_var->workers);
 	shmctl(shwid, IPC_RMID, NULL);
@@ -124,15 +114,20 @@ void exit_home_iot(){
 	msgctl(mqid, IPC_RMID, 0);
 	
 	free(internalQ);
-	
-	write_logfile("TESTE4\n");
 
 }
 
 void sigint(int signum) {
 	write_logfile("SIGNAL SIGINT RECEIVED\n");
 	exit_home_iot();
-	exit(0);
+	exit(signum);
+}
+
+void signals_to_ignore(int signum) {
+	char temp[50];
+	sprintf(temp, "SIGNAL %d RECEIVED\n", signum);
+	write_logfile(temp);
+	
 }
 
 void write_logfile(char * message){
@@ -147,13 +142,15 @@ void write_logfile(char * message){
     sprintf(time_aux, "%d:%d:%d ", timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 
     sem_wait(mutex_log);
-    
+
     log = fopen("log.txt", "a");
     
     fwrite(time_aux, 1, strlen(time_aux), log);
     fwrite(message, 1, strlen(message), log);
     printf("%s", time_aux);
     printf("%s", message);
+    
+    fflush(stdout);
     
     fclose(log);
     
@@ -169,6 +166,7 @@ void * console_reader(void * id_t) {
     
 	char buffer[1024] = "";
 	
+	// If the writer closes the pipe the console reader reopens it
 	while(1){
 		
 		long tam;
@@ -176,17 +174,16 @@ void * console_reader(void * id_t) {
 		// Opens the pipe for reading
 		int fd;
 		if ((fd = open("CONSOLE_PIPE", O_RDONLY)) < 0) {
-			perror("Cannot open pipe for reading: ");
-			exit(0);
+			write_logfile("CANNOT OPEN CONSOLE_PIPE FOR READING\n");
+			sigint(1);
 		}
 		
 		do {
 			tam = read(fd, buffer, 1024);
-			//printf("tam: %ld\n", tam);
 			buffer[tam-1] = '\0';
 			
 			if (strcmp(buffer, "") != 0){
-				printf("CONSOLE_PIPE: %s\n", buffer);
+				if (DEBUG) printf("CONSOLE_PIPE: %s\n", buffer);
 				
 				Node * newNode = (Node*) malloc(sizeof(Node));
 				newNode->data = (char*) malloc(1024);
@@ -198,25 +195,22 @@ void * console_reader(void * id_t) {
 				pthread_mutex_lock(&mutex_queue);
 				
 				if (internalQ->count == sh_var->QUEUE_SZ) {
-					printf("FILA CHEIA!\n");
+					if (DEBUG) printf("FILA CHEIA!\n");
 				}
 				
+				// If the queue is full the task sent by the user won't be lost the thread should wait for an empty slot
 				sem_wait(sem_qsize);
 				
-				printf("ENTROU NA FILA\n");
-	
+				if (DEBUG) printf("ENTROU NA FILA\n");
+				
+				// If the queue is empty
 				if (internalQ->count == 0){
-					//printf("aqui\n");
 					internalQ->head = newNode;
 					internalQ->tail = newNode;
 					internalQ->count++;
 				} else {
-				/*
-					internalQ->head->next = newNode;
-					newNode->prev = internalQ->head;
-					internalQ->head = newNode;
-				*/
-					//printf("aqui2\n");
+					
+					// If the queue is not empty this cycle will search for the last user_console node and the new node will be placed at the end of tht node
 					Node * temp = internalQ->head;
 					while (temp != NULL && temp->isSensor == 0) {
 						temp = temp->prev;
@@ -258,15 +252,15 @@ void * sensor_reader(void * id_t) {
 
 	char buffer[1024] = "";
 	
+	// If the writer closes the pipe the sensor reader reopens it
 	while(1){
-		
 		long tam; 
 		
 		// Opens the pipe for reading
 		int fd;
 		if ((fd = open("SENSOR_PIPE", O_RDONLY)) < 0) {
-			perror("Cannot open pipe for reading: ");
-			exit(0);
+			write_logfile("CANNOT OPEN CONSOLE_PIPE FOR READING\n");
+			sigint(1);
 		}
 		
 		do {
@@ -274,7 +268,7 @@ void * sensor_reader(void * id_t) {
 			buffer[tam-1] = '\0';
 			
 			if (strcmp(buffer, "") != 0){
-				printf("SENSOR_PIPE: %s\n", buffer);
+				if (DEBUG) printf("SENSOR_PIPE: %s\n", buffer);
 				
 				Node * newNode = (Node*) malloc(sizeof(Node));
 				newNode->data = (char*) malloc(1024);
@@ -286,18 +280,18 @@ void * sensor_reader(void * id_t) {
 				
 				pthread_mutex_lock(&mutex_queue);
 				
+				// If the queue is full this thread won´t wait for an empty slot, instead the message will be discarded
 				int value;
 				sem_getvalue(sem_qsize, &value);
 				if (value != 0)
 				{
-					//printf("entrou semaforo\n");
 					sem_wait(sem_qsize);
 				}
-				//printf("VALUE >>>>>>> %d\n", value);
+
 				if (internalQ->count == sh_var->QUEUE_SZ) {
-					printf("FILA CHEIA!\n");
+					if (DEBUG) printf("FILA CHEIA!\n");
 				} else {
-					printf("ENTROU NA FILA\n");
+					if (DEBUG) printf("ENTROU NA FILA\n");
 	
 					if (internalQ->count == 0){
 						internalQ->head = newNode;
@@ -332,19 +326,7 @@ void * dispatcher(void * id_t) {
 	}
 		
 	while(1){
-		/*
-		//sem_wait(mutex_shm);
-		if (sh_var->terminate == 1)
-		{
-			write_logfile("THREAD DISPATCHER EXITING\n");
-			pthread_exit(NULL);
-		}
-		//sem_post(mutex_shm);
-		*/
 		
-		//int value;
-		//sem_getvalue(sem_qcons, &value);
-		//printf(">> %d\n", value);
 		sem_wait(sem_qcons);
 		
 		pthread_mutex_lock(&mutex_queue);
@@ -366,16 +348,20 @@ void * dispatcher(void * id_t) {
 		sem_post(sem_qsize);
 		
 		
-		// Se nao houver worker livre espera
-
+		// If there is no worker available the thread waits
 		sem_wait(active_workers);
 		sem_wait(mutex_shm);
-		printf("[DISPATCHER]: CONSUMED MESSAGE %s\n", no->data);
+		if (DEBUG) printf("[DISPATCHER]: CONSUMED MESSAGE %s\n", no->data);
 		int k;
 		for (k = 0; k < sh_var->N_WORKERS; k++) {
 			//printf("teste %d\n", sh_var->workers[k].active);
 			if (sh_var->workers[k].active == 0) {
-				printf("====%d\n", k);
+				if (DEBUG) printf("====%d\n", k);
+				
+				char mes[100];
+				sprintf(mes, "DISPATCHER: MESSAGE %s SENT FOR PROCESSING ON WORKER %d\n", no->data, k+1);
+				write_logfile(mes);
+				
 				write(channels[k][1], no->data, 1024);
 				break;
 			}
@@ -383,10 +369,6 @@ void * dispatcher(void * id_t) {
 		sem_post(mutex_shm);
 		
 		free(no);
-		
-		//sleep(2);
-		//sigint(0);
-		
 	}
 
 }
@@ -399,6 +381,12 @@ int create_procs_threads() {
     for (i = 0; i < sh_var->N_WORKERS; i++) {
         if (fork() == 0) {
         	signal(SIGINT, SIG_IGN);
+        	signal(SIGTSTP, SIG_IGN);
+			signal(SIGKILL, SIG_IGN);
+			signal(SIGTERM, SIG_IGN);
+			signal(SIGKILL, SIG_IGN);
+			signal(SIGQUIT, SIG_IGN);
+			signal(SIGSTOP, SIG_IGN);
             worker(i + 1);
             exit(0);
         }
@@ -407,6 +395,12 @@ int create_procs_threads() {
     // Create Alerts_Watcher
     if (fork() == 0) {
     	signal(SIGINT, SIG_IGN);
+    	signal(SIGTSTP, SIG_IGN);
+		signal(SIGKILL, SIG_IGN);
+		signal(SIGTERM, SIG_IGN);
+		signal(SIGKILL, SIG_IGN);
+		signal(SIGQUIT, SIG_IGN);
+		signal(SIGSTOP, SIG_IGN);
         alerts_watcher(0);
         exit(0);
     }
@@ -432,22 +426,21 @@ int create_procs_threads() {
     pthread_join(sh_var->sensor_reader_t, NULL);
     pthread_join(sh_var->dispatcher_t, NULL);
     
-    /*
-    for (i = 0; i < sh_var->N_WORKERS+1; i++) {
-        wait(NULL);
-    }
-    */
-    
-    
     return 0;
 }
 
 int main(int argc, char *argv[]) {
 	
 	//terminates when CTRL-C is pressed
-	signal(SIGINT,sigint);
-
-	printf("pid: %d\n", getpid());
+	signal(SIGINT, sigint);
+	signal(SIGTSTP, signals_to_ignore);
+	signal(SIGKILL, signals_to_ignore);
+	signal(SIGTERM, signals_to_ignore);
+	signal(SIGKILL, signals_to_ignore);
+	signal(SIGQUIT, signals_to_ignore);
+	signal(SIGSTOP, signals_to_ignore);
+	
+	if (DEBUG) printf("pid: %d\n", getpid());
 
     log = fopen("log.txt", "w");
     fclose(log);
@@ -456,7 +449,7 @@ int main(int argc, char *argv[]) {
 
     if (argc != 2) {
         printf("Wrong argc! %d\n", argc);
-        return -1;
+        return 1;
     }
 
     // Create Shared Memory
@@ -562,17 +555,16 @@ int main(int argc, char *argv[]) {
 	
 	// Creates the named pipe if it doesn't exist yet
 	if ((mkfifo("CONSOLE_PIPE", O_CREAT|O_EXCL|0600)<0) && (errno!= EEXIST)) {
-		perror("Cannot create pipe: ");
-		exit(0);
+		write_logfile("CANNOT CREATE CONSOLE_PIPE\n");
+		failure = 1;
 	}
 
 	if ((mkfifo("SENSOR_PIPE", O_CREAT|O_EXCL|0600)<0) && (errno!= EEXIST)) {
-		perror("Cannot create pipe: ");
-		exit(0);
+		write_logfile("CANNOT CREATE SENSOR\n");
+		failure = 1;
 	}
 	
 	// Creates the (N_WORKERS) unamed pipes
-	
 	channels = (int**)malloc(N_WORKERS * sizeof(int*));
 	
 	int k;
@@ -593,12 +585,11 @@ int main(int argc, char *argv[]) {
 	
 	// Create the Message Queue
 	if((mqid = msgget(MSG_KEY , IPC_CREAT|0777)) < 0) {
-		perror("Error creating message queue!\n");
-		exit(0);
+		write_logfile("ERROR CREATING MESSAGE QUEUE\n");
+		failure = 1;
 	}
 	
 	// Initialize cond var
-	
 	pthread_mutexattr_t attrmutex;
 	pthread_condattr_t attrcond;
 	
@@ -608,10 +599,9 @@ int main(int argc, char *argv[]) {
 	pthread_condattr_init(&attrcond);
 	pthread_condattr_setpshared(&attrcond, PTHREAD_PROCESS_SHARED);
 	
-	//sh_var->sens_watcher = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
 	pthread_cond_init(&sh_var->sens_watcher, &attrcond);
 	pthread_mutex_init(&sh_var->mutex_cond, &attrmutex);
-	//sh_var->mutex_cond = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+
 
     write_logfile("HOME_IOT SIMULATOR STARTING\n");
     
@@ -619,7 +609,7 @@ int main(int argc, char *argv[]) {
     if (failure == 0)
         create_procs_threads();
     else 
-    	exit_home_iot();
+    	sigint(1);
     	
     //wait(NULL);
 
