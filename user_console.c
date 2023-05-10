@@ -43,13 +43,19 @@ void * message_receiver(void * id_t) {
 	int user_id = *((int *)id_t);
 
 	Message msg;
+	int status;
 
 	while(1) {
-		msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) user_id, 0);
-        //printf("RCV: %d\n", msg.buffer);
+		status = msgrcv(mqid, &msg, sizeof(msg)-sizeof(long), (long) user_id, 0);
+        if (status == -1) {
+        	sigint();
+        	break;
+        }
         puts(msg.buffer);
         printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n");
 	}
+	
+	pthread_exit(NULL);
 }
 
 
@@ -93,7 +99,7 @@ int main(int argc, char *argv[]) {
 	//mutex_pipe = sem_open("MUTEX_CONSOLE_PIPE", O_CREAT|O_EXCL, 0777, 1);
 
     // Print MENU
-    printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n> ");
+    printf("\nexit\nstats\nreset\nsensors\nadd_alert [id] [chave] [min] [max]\nremove_alert [id]\nlist_alerts\n\n");
 
     char option[100];
     while(fgets(option, 100, stdin)) {
@@ -106,7 +112,7 @@ int main(int argc, char *argv[]) {
         int count = 0;
         int notValid = 0;
         token = strtok(option, " \n");
-        int errPipe = -1;
+        int errPipe = 0;
 
         while (token != NULL) {
             tokens[count] = strdup(token);
@@ -231,7 +237,6 @@ int main(int argc, char *argv[]) {
 			printf("ERROR: pipe does not exist\n");
 			sigint();
 		}
-        // Print MENU
 		memset(buffer, 0, 1024);
     }
 

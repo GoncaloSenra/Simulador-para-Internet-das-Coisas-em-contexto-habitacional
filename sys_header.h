@@ -90,6 +90,8 @@ typedef struct shared_memory{
 	Key * keys;
 	Alert * alerts;
 	
+	pid_t alerts_watcher_pid;
+	
 	// Cond Var
 	pthread_cond_t sens_watcher;
 	pthread_mutex_t mutex_cond;

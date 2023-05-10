@@ -18,27 +18,77 @@ void exit_home_iot(){
 	
 	sh_var->terminate=1;
 	
+	// ERROR: corrupted size vs. prev_size
+	printf("%ld\n", sh_var->dispatcher_t);
+
+	
     pthread_cancel(sh_var->console_reader_t);
-    unlink("CONSOLE_PIPE");
-	write_logfile("THREAD CONSOLE_READER EXITING\n");
+	write_logfile("THREAD CONSOLE_READER TERMINATED\n");
     
     pthread_cancel(sh_var->sensor_reader_t);
-    unlink("SENSOR_PIPE");
-	write_logfile("THREAD SENSOR_READER EXITING\n");
+	write_logfile("THREAD SENSOR_READER TERMINATED\n");
 			
     pthread_cancel(sh_var->dispatcher_t);
-    write_logfile("THREAD DISPATCHER EXITING\n");
+    write_logfile("THREAD DISPATCHER TERMINATED\n");
     
 	sem_post(mutex_shm);
 	
 	write_logfile("HOME_IOT SIMULATOR CLOSING\n");
 	
-    // Remove resources
+	write_logfile("TESTE1\n");
+	
+	int k;
+	for (k = 0; k < sh_var->N_WORKERS; k++) {
+		wait(&sh_var->workers[k].pid);
+		close(channels[k][0]);
+		close(channels[k][1]);
+		free(channels[k]);
+	}
+	
+	free(channels);
+	
+	pthread_mutex_lock(&sh_var->mutex_cond);
+	pthread_cond_signal(&sh_var->sens_watcher);
+	pthread_mutex_unlock(&sh_var->mutex_cond);
+	
+	wait(&sh_var->alerts_watcher_pid);
+	
+	// PRINT INTERNALQ SLOTS
+	int i;
+	char mes [1024];
+	Node * temp = internalQ->head;
+	
+	strcpy(mes, "INTERNALQ:\n");
+	
+	if (internalQ->count == 0) {
+		char aux [50];
+		
+		sprintf(aux, "\tEMPTY\n");
+		strcat(mes, aux);
+	} else {
+		
+		for (i = 0; i < internalQ->count; i++) {
+			char aux [50];
+			
+			sprintf(aux, "\t%d: %s\n", i, temp->data);
+			strcat(mes, aux);
+
+			memset(aux, 0, 50);
+			temp = temp->prev;
+		}
+		
+	}
+	
+	write_logfile(mes);
+	
+	write_logfile("TESTE1.5\n");
+	
+	// Remove resources
     sem_close(mutex_shm);
 	sem_unlink("MUTEX_SHM");
     
-    sem_close(mutex_log);
-	sem_unlink("MUTEX_LOG");
+    //sem_close(mutex_log);
+	//sem_unlink("MUTEX_LOG");
 	
 	sem_close(sem_qsize);
 	sem_unlink("SEM_QSIZE");
@@ -49,14 +99,16 @@ void exit_home_iot(){
 	sem_close(active_workers);
 	sem_unlink("A_WORKERS");
 	
+	unlink("CONSOLE_PIPE");
+	unlink("SENSOR_PIPE");
+	
+	write_logfile("TESTE2\n");
+	
 	pthread_mutex_destroy(&mutex_queue);
 	pthread_mutex_destroy(&sh_var->mutex_cond);
 	pthread_cond_destroy(&sh_var->sens_watcher);
 	
-	int i;
-	for (i = 0; i < sh_var->N_WORKERS; i++) {
-		kill(sh_var->workers[i].pid, SIGKILL);
-	}
+	write_logfile("TESTE3\n");
 	
 	shmdt(sh_var->workers);
 	shmctl(shwid, IPC_RMID, NULL);
@@ -72,11 +124,12 @@ void exit_home_iot(){
 	msgctl(mqid, IPC_RMID, 0);
 	
 	free(internalQ);
+	
+	write_logfile("TESTE4\n");
 
 }
 
-void sigint(int signum) { // handling of CTRL-C
-	//printf("hellooooo\n");
+void sigint(int signum) {
 	write_logfile("SIGNAL SIGINT RECEIVED\n");
 	exit_home_iot();
 	exit(0);
@@ -135,7 +188,7 @@ void * console_reader(void * id_t) {
 			if (strcmp(buffer, "") != 0){
 				printf("CONSOLE_PIPE: %s\n", buffer);
 				
-				Node * newNode = (Node*) malloc(sizeof(Node*));
+				Node * newNode = (Node*) malloc(sizeof(Node));
 				newNode->data = (char*) malloc(1024);
 				strcpy(newNode->data, buffer);
 				newNode->isSensor = 0;
@@ -153,6 +206,7 @@ void * console_reader(void * id_t) {
 				printf("ENTROU NA FILA\n");
 	
 				if (internalQ->count == 0){
+					//printf("aqui\n");
 					internalQ->head = newNode;
 					internalQ->tail = newNode;
 					internalQ->count++;
@@ -162,6 +216,7 @@ void * console_reader(void * id_t) {
 					newNode->prev = internalQ->head;
 					internalQ->head = newNode;
 				*/
+					//printf("aqui2\n");
 					Node * temp = internalQ->head;
 					while (temp != NULL && temp->isSensor == 0) {
 						temp = temp->prev;
@@ -221,7 +276,7 @@ void * sensor_reader(void * id_t) {
 			if (strcmp(buffer, "") != 0){
 				printf("SENSOR_PIPE: %s\n", buffer);
 				
-				Node * newNode = (Node*) malloc(sizeof(Node*));
+				Node * newNode = (Node*) malloc(sizeof(Node));
 				newNode->data = (char*) malloc(1024);
 				
 				sprintf(newNode->data, "SENSOR#%s", buffer);
@@ -329,6 +384,8 @@ void * dispatcher(void * id_t) {
 		
 		free(no);
 		
+		//sleep(2);
+		//sigint(0);
 		
 	}
 
@@ -355,8 +412,7 @@ int create_procs_threads() {
     }
     
 	
-	//printf("teste\n");
-	
+
 	sem_wait(mutex_shm);
     // Create Console Reader thread
     int cr_id = 1;
@@ -542,8 +598,20 @@ int main(int argc, char *argv[]) {
 	}
 	
 	// Initialize cond var
-	sh_var->sens_watcher = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
-	sh_var->mutex_cond = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
+	
+	pthread_mutexattr_t attrmutex;
+	pthread_condattr_t attrcond;
+	
+	pthread_mutexattr_init(&attrmutex);
+	pthread_mutexattr_setpshared(&attrmutex, PTHREAD_PROCESS_SHARED);
+	
+	pthread_condattr_init(&attrcond);
+	pthread_condattr_setpshared(&attrcond, PTHREAD_PROCESS_SHARED);
+	
+	//sh_var->sens_watcher = (pthread_cond_t) PTHREAD_COND_INITIALIZER;
+	pthread_cond_init(&sh_var->sens_watcher, &attrcond);
+	pthread_mutex_init(&sh_var->mutex_cond, &attrmutex);
+	//sh_var->mutex_cond = (pthread_mutex_t) PTHREAD_MUTEX_INITIALIZER;
 
     write_logfile("HOME_IOT SIMULATOR STARTING\n");
     

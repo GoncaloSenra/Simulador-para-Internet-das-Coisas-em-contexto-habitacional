@@ -15,22 +15,42 @@ int worker(int id) {
     sem_wait(mutex_shm);
     sh_var->workers[id-1].pid = getpid();
     sh_var->workers[id-1].active = 0;
-	sh_var->teste++;
-	//sh_var->N_WORKERS--;
-	//sh_var->workers[id-1].active = 1;
-    //printf("TESTE: %d\n", sh_var->teste);
     sem_post(mutex_shm);
     
     char buffer[1024];
 	
+	fd_set read_set;
+	
+	
     
     while (1) {
-    	memset(buffer, 0, 1024);
-    	//printf("ID %d\n", id-1);
-		    	
-    	/*int tam = */read(channels[id-1][0], &buffer, 1024);
-    	//buffer[tam -1] = '\0';
     	
+    	struct timeval timeout;
+		timeout.tv_sec = 2;
+		timeout.tv_usec = 0;
+		
+    	FD_ZERO(&read_set);
+	  	FD_SET(channels[id-1][0], &read_set);
+	  	int aux = select(channels[id-1][0]+1, &read_set, NULL, NULL, &timeout); 
+    	
+    	if (aux == 1) {
+    		memset(buffer, 0, 1024);
+    		read(channels[id-1][0], &buffer, 1024);
+    	} else if (aux == 0) {
+    		sem_wait(mutex_shm);
+			if (sh_var->terminate == 1) {
+				sprintf(mes, "WORKER %d TERMINATED\n", id);
+				sem_post(mutex_shm);
+				write_logfile(mes);
+				exit(0);
+			} else {
+				sem_post(mutex_shm);
+				continue;
+			}
+    	}
+    		
+    	//buffer[tam -1] = '\0';
+
     	sem_wait(mutex_shm);
     	sh_var->workers[id-1].active = 1;
     	sem_post(mutex_shm);
@@ -121,7 +141,7 @@ int worker(int id) {
 			sem_post(mutex_shm);
 			
 			pthread_cond_signal(&sh_var->sens_watcher);
-			printf("SIGNALLLLLLLLLLLLLLLLLL\n");
+	
 			pthread_mutex_unlock(&sh_var->mutex_cond);
         } else {
 
@@ -157,7 +177,7 @@ int worker(int id) {
         		strcpy(msg.buffer, text);
         		
         		msgsnd(mqid, &msg, sizeof(msg)-sizeof(long), 0);
-        		
+        		//printf("SND STATUS: %d ERRNO: %d, mqid %d\n", teste, errno, mqid);
         		
         		
         	} else if (strcmp(token, "ADD_ALERT") == 0) {
@@ -193,6 +213,8 @@ int worker(int id) {
 						sh_var->alerts[j].min = atoi(token);	
 						token = strtok(NULL, "#\n");
 						sh_var->alerts[j].max = atoi(token);
+						
+						sh_var->alerts[j].id_user = id;
 						break;
 					} else if (strcmp(sh_var->alerts[j].id, token) == 0) {
 						exists = 1;
